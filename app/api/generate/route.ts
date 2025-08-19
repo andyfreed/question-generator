@@ -15,7 +15,8 @@ async function extractTextFromFile(file: File): Promise<string> {
 	const name = file.name.toLowerCase();
 
 	if (name.endsWith('.pdf')) {
-		const pdfParse = (await import('pdf-parse')).default;
+		// Import internal lib to avoid package index.js debug path that reads a test file
+		const pdfParse = (await import('pdf-parse/lib/pdf-parse.js')).default as unknown as (buf: Buffer) => Promise<{ text: string }>;
 		const parsed = await pdfParse(buf);
 		return (parsed.text || '').trim();
 	}
