@@ -1,95 +1,94 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+'use client';
+
+import { useState } from 'react';
+
+type Question = {
+	question: string;
+	options: string[];
+	correctIndex: number;
+};
 
 export default function Home() {
-  return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol>
-          <li>
-            Get started by editing <code>app/page.tsx</code>.
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+	const [file, setFile] = useState<File | null>(null);
+	const [count, setCount] = useState<number>(10);
+	const [loading, setLoading] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const [questions, setQuestions] = useState<Question[]>([]);
 
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.secondary}
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className={styles.footer}>
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+	async function handleSubmit(e: React.FormEvent) {
+		e.preventDefault();
+		setError(null);
+		setQuestions([]);
+		if (!file) {
+			setError('Please choose a .pdf or .docx file.');
+			return;
+		}
+		const form = new FormData();
+		form.append('file', file);
+		form.append('count', String(count));
+
+		setLoading(true);
+		try {
+			const res = await fetch('/api/generate', { method: 'POST', body: form });
+			const data = await res.json();
+			if (!res.ok) throw new Error(data?.error || 'Failed to generate');
+			setQuestions(data.questions || []);
+		} catch (err: any) {
+			setError(err?.message || 'Something went wrong');
+		} finally {
+			setLoading(false);
+		}
+	}
+
+	return (
+		<main style={{ maxWidth: 800, margin: '40px auto', padding: 16 }}>
+			<h1>AI Exam Generator</h1>
+			<form onSubmit={handleSubmit} style={{ display: 'grid', gap: 12, marginTop: 16 }}>
+				<input
+					type="file"
+					accept=".pdf,.docx"
+					onChange={(e) => setFile(e.target.files?.[0] || null)}
+				/>
+				<label>
+					Number of questions:&nbsp;
+					<input
+						type="number"
+						min={1}
+						value={count}
+						onChange={(e) => setCount(Number(e.target.value))}
+						style={{ width: 100 }}
+					/>
+				</label>
+				<button type="submit" disabled={loading}>
+					{loading ? 'Generating…' : 'Generate'}
+				</button>
+			</form>
+
+			{error && <p style={{ color: 'red', marginTop: 12 }}>{error}</p>}
+
+			{questions.length > 0 && (
+				<section style={{ marginTop: 24 }}>
+					<h2>Questions</h2>
+					<ol style={{ paddingLeft: 20 }}>
+						{questions.map((q, idx) => (
+							<li key={idx} style={{ marginBottom: 16 }}>
+								<div style={{ fontWeight: 600 }}>{q.question}</div>
+								<ol type="A" style={{ paddingLeft: 20 }}>
+									{q.options.map((opt, i) => (
+										<li key={i} style={{ margin: '4px 0' }}>
+											{opt}
+											{' '}
+											{q.correctIndex === i && (
+												<span style={{ color: 'green' }}>(correct)</span>
+											)}
+										</li>
+									))}
+								</ol>
+							</li>
+						))}
+					</ol>
+				</section>
+			)}
+		</main>
+	);
 }
