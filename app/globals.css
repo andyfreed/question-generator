@@ -1,12 +1,22 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --muted: rgba(0,0,0,0.6);
+  --card: rgba(255,255,255,0.85);
+  --border: rgba(0,0,0,0.12);
+  --brand: #7c5cff;
+  --brand-600: #6a4bff;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --muted: rgba(255,255,255,0.65);
+    --card: rgba(20,20,20,0.7);
+    --border: rgba(255,255,255,0.12);
+    --brand: #7c5cff;
+    --brand-600: #8a76ff;
   }
 }
 
@@ -18,7 +28,9 @@ body {
 
 body {
   color: var(--foreground);
-  background: var(--background);
+  background: radial-gradient(1200px 600px at 20% -10%, rgba(124,92,255,0.15), transparent 60%),
+              radial-gradient(1000px 600px at 120% 10%, rgba(0,176,255,0.15), transparent 60%),
+              var(--background);
   font-family: Arial, Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -39,4 +51,100 @@ a {
   html {
     color-scheme: dark;
   }
+}
+
+/* --- App styles --- */
+.container {
+  max-width: 980px;
+  margin: 56px auto;
+  padding: 0 16px;
+}
+
+.card {
+  background: var(--card);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+}
+
+.title {
+  font-size: 32px;
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+}
+
+.subtext {
+  color: var(--muted);
+  margin-bottom: 18px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+}
+
+.fullRow {
+  grid-column: 1 / -1;
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.input, .select, .file {
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.btn {
+  appearance: none;
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  background: transparent;
+  cursor: pointer;
+  transition: all .18s ease;
+}
+
+.btnPrimary {
+  background: var(--brand);
+  border-color: transparent;
+}
+.btnPrimary:hover { background: var(--brand-600); }
+
+.btnGhost:hover { background: rgba(255,255,255,0.06); }
+
+.error {
+  margin-top: 12px;
+  color: #ff6b6b;
+}
+
+.questionList {
+  margin-top: 18px;
+  padding-left: 18px;
+}
+
+.correct {
+  color: #2ecc71;
+}
+
+@media (max-width: 780px) {
+  .formGrid { grid-template-columns: 1fr; }
 }

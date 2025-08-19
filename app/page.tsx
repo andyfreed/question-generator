@@ -102,76 +102,56 @@ export default function Home() {
 	}
 
 	return (
-		<main style={{ maxWidth: 800, margin: '40px auto', padding: 16 }}>
-			<h1>AI Exam Generator</h1>
-			<form onSubmit={handleSubmit} style={{ display: 'grid', gap: 12, marginTop: 16 }}>
-				<input
-					type="file"
-					accept=".pdf,.docx"
-					onChange={(e) => setFile(e.target.files?.[0] || null)}
-				/>
-				<label>
-					Model:&nbsp;
-					<select value={model} onChange={(e) => setModel(e.target.value)}>
-						<option value="gpt-5-mini">gpt-5-mini</option>
-						<option value="gpt-4o-mini">gpt-4o-mini</option>
-						<option value="o4-mini">o4-mini</option>
-					</select>
-				</label>
-				<label>
-					Category:&nbsp;
-					<input
-						type="text"
-						placeholder="e.g., Biology Unit 1"
-						value={category}
-						onChange={(e) => setCategory(e.target.value)}
-						required
-						style={{ width: 260 }}
-					/>
-				</label>
-				<label>
-					Number of questions:&nbsp;
-					<input
-						type="number"
-						min={1}
-						value={count}
-						onChange={(e) => setCount(Number(e.target.value))}
-						style={{ width: 100 }}
-					/>
-				</label>
-				<button type="submit" disabled={loading}>
-					{loading ? 'Generating…' : 'Generate'}
-				</button>
-			</form>
-
-			{error && <p style={{ color: 'red', marginTop: 12 }}>{error}</p>}
-
-			{questions.length > 0 && (
-				<section style={{ marginTop: 24 }}>
-					<h2>Questions</h2>
-					<div style={{ margin: '8px 0 16px' }}>
-						<button onClick={downloadCsv}>Download CSV</button>
+		<div className="container">
+			<div className="card">
+				<h1 className="title">AI Exam Generator</h1>
+				<p className="subtext">Upload a .pdf or .docx, pick a model, set a category and number of questions, then generate and download a CSV.</p>
+				<form onSubmit={handleSubmit} className="formGrid">
+					<label className="label fullRow">
+						<span>Course file</span>
+						<input className="file" type="file" accept=".pdf,.docx" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+					</label>
+					<label className="label">
+						<span>Model</span>
+						<select className="select" value={model} onChange={(e) => setModel(e.target.value)}>
+							<option value="gpt-5-mini">gpt-5-mini</option>
+							<option value="gpt-4o-mini">gpt-4o-mini</option>
+							<option value="o4-mini">o4-mini</option>
+						</select>
+					</label>
+					<label className="label">
+						<span>Category</span>
+						<input className="input" type="text" placeholder="e.g., Biology Unit 1" value={category} onChange={(e) => setCategory(e.target.value)} required />
+					</label>
+					<label className="label">
+						<span>Number of questions</span>
+						<input className="input" type="number" min={1} value={count} onChange={(e) => setCount(Number(e.target.value))} />
+					</label>
+					<div className="actions fullRow">
+						<button type="submit" className="btn btnPrimary" disabled={loading}>{loading ? 'Generating…' : 'Generate'}</button>
+						<button type="button" className="btn btnGhost" onClick={downloadCsv} disabled={!questions.length}>Download CSV</button>
 					</div>
-					<ol style={{ paddingLeft: 20 }}>
+				</form>
+
+				{error && <p className="error">{error}</p>}
+
+				{questions.length > 0 && (
+					<ol className="questionList">
 						{questions.map((q, idx) => (
-							<li key={idx} style={{ marginBottom: 16 }}>
+							<li key={idx}>
 								<div style={{ fontWeight: 600 }}>{q.question}</div>
 								<ol type="A" style={{ paddingLeft: 20 }}>
 									{q.options.map((opt, i) => (
 										<li key={i} style={{ margin: '4px 0' }}>
-											{opt}
-											{' '}
-											{q.correctIndex === i && (
-												<span style={{ color: 'green' }}>(correct)</span>
-											)}
+											{opt} {q.correctIndex === i && (<span className="correct">(correct)</span>)}
 										</li>
 									))}
 								</ol>
 							</li>
 						))}
 					</ol>
-				</section>
-			)}
-		</main>
+				)}
+			</div>
+		</div>
 	);
 }
