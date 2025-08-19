@@ -146,15 +146,47 @@ function parseJsonFromText(text: string): any | null {
   return null;
 }
 
-// --- New admin question filter ---
+// --- Filters for admin/meta and structure references ---
 const BANNED_TOKENS_IN_STEM = [
   'credit','credits','cpe','ce hours','course number','course id',
   'provider','nasba','approved','sponsor','author','contact','support'
 ];
 
+const BANNED_STRUCTURE_TOKENS = [
+  'chapter','section','module','lesson','appendix','figure','table','as listed in','according to'
+];
+
 function isAdminQuestion(q: any): boolean {
   const hay = ((q?.question || '') + ' ' + (q?.options || []).join(' ')).toLowerCase();
   return BANNED_TOKENS_IN_STEM.some(t => hay.includes(t));
+}
+
+function stillHasStructureRefs(stem: string): boolean {
+  const low = (stem || '').toLowerCase();
+  return BANNED_STRUCTURE_TOKENS.some(t => low.includes(t));
+}
+
+// Rewrite “listed in Chapter 1…” -> concept-only stem
+function rewriteStructureStem(stem: string): string {
+  if (!stem) return stem;
+  let s = stem;
+
+  // Remove references like "as listed in Chapter 1 ..." / "in Section 2 ..." / "according to Chapter ..."
+  s = s.replace(/\b(as\s+)?listed\s+(explicitly\s+)?(as\s+part\s+of|in)\s+(chapter|section|module|lesson)\s*[^?]*?/ig, '');
+  s = s.replace(/\b(according\s+to|under|in)\s+(chapter|section|module|lesson|appendix)\s*[^,?]*,?\s*/ig, '');
+  s = s.replace(/\b(see|refer\s+to)\s+(figure|table)\s+\w+[^,?]*,?\s*/ig, '');
+
+  // Clean up leftover glue words
+  s = s.replace(/\s{2,}/g, ' ').trim();
+
+  // Normalize "Which of the following topic(s) is/are"
+  s = s.replace(/\bWhich of the following\s+(topics|items)\s+is\s+$/i, 'Which of the following is ');
+  s = s.replace(/\bWhich of the following\s+(topics|items)\s+are\s+$/i, 'Which of the following are ');
+
+  // Ensure it ends with a single '?'
+  s = s.replace(/[?.!]*\s*$/, '?');
+
+  return s;
 }
 
 // --- Small util for timeouts ---
@@ -205,33 +237,6 @@ export async function POST(req: NextRequest) {
     const desiredTotal = Math.min(requestedCount, QUESTION_CAP);
     const perChunk = Math.max(1, Math.ceil(desiredTotal / Math.max(1, chunksToProcess.length)));
 
-    // Schema kept for documentation; output shape unchanged
-    const schema = {
-      type: 'object',
-      properties: {
-        questions: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              question: { type: 'string' },
-              options: {
-                type: 'array',
-                items: { type: 'string' },
-                minItems: 4,
-                maxItems: 4
-              },
-              correctIndex: { type: 'integer', minimum: 0, maximum: 3 }
-            },
-            required: ['question', 'options', 'correctIndex'],
-            additionalProperties: false
-          }
-        }
-      },
-      required: ['questions'],
-      additionalProperties: false
-    };
-
     const allQuestions: any[] = [];
 
     // Same allowlist/default model behavior
@@ -257,8 +262,14 @@ You are an expert exam author. From the course **instructional content**, genera
 
 Scope (what to ask):
 - Concepts, definitions, principles, procedures/steps, formulas & calculations, applied scenarios, pitfalls, and comparisons found in the text.
+
+Style (how to write):
+- Write stems that **stand alone**. Do **not** reference document structure (no "Chapter/Section/Module/Lesson X", "as listed in…", page numbers, figure/table names).
+- Use neutral wording: ask about the **concept itself**, not where it appears.
+
 Hard exclusions (never ask about):
 - Administrative/metadata: course title/name/number, credit hours/CPE/CE, provider/sponsor/author bios, NASBA or approvals, release/edition/version, page/section numbers, headers/footers/TOC, contact/purchasing/support, file names, copyright/disclaimers.
+- **Document-structure references**: "Chapter/Section/Module/Lesson/Appendix", "Figure/Table", "as listed in…", "according to Chapter…", etc.
 - Any information not present in the instructional content of this chunk.
 If this chunk contains only excluded/administrative material, return: {"questions": []}
 
@@ -292,11 +303,21 @@ Course content:
 
       const text = (response as any).output_text || '';
       const parsed = parseJsonFromText(text) ?? { questions: [] };
-      if (Array.isArray(parsed?.questions)) allQuestions.push(...parsed.questions);
+      if (Array.isArray(parsed?.questions)) {
+        for (const q of parsed.questions) {
+          if (q?.question) {
+            q.question = rewriteStructureStem(q.question);
+          }
+        }
+        allQuestions.push(...parsed.questions);
+      }
     }
 
-    // Filter any residual admin-style questions, then dedupe and cap
-    const filtered = allQuestions.filter(q => !isAdminQuestion(q));
+    // Filter any residual admin-style or structure-referencing questions, then dedupe and cap
+    const filtered = allQuestions
+      .filter(q => !isAdminQuestion(q))
+      .filter(q => q?.question && !stillHasStructureRefs(q.question));
+
     const finalQuestions = dedupeAndLimit(filtered, desiredTotal);
     return NextResponse.json({ modelUsed: modelInUse, questions: finalQuestions });
   } catch (err: any) {
