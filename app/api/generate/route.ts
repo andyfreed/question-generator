@@ -94,7 +94,11 @@ export async function POST(req: NextRequest) {
 		if (!rawText) return NextResponse.json({ error: 'Empty document' }, { status: 400 });
 
 		const chunks = chunkText(rawText, 8000);
-		const perChunk = Math.max(1, Math.ceil(requestedCount / chunks.length));
+		// Limit chunks to reduce runtime on serverless (default 1 on Vercel). Increase via MAX_CHUNKS if needed.
+		const defaultMaxChunks = process.env.VERCEL ? 1 : 3;
+		const maxChunks = Math.max(1, Number(process.env.MAX_CHUNKS || defaultMaxChunks));
+		const chunksToProcess = chunks.slice(0, maxChunks);
+		const perChunk = Math.max(1, Math.ceil(requestedCount / chunksToProcess.length));
 
 		const schema = {
 			type: 'object',
@@ -134,7 +138,7 @@ export async function POST(req: NextRequest) {
 		let modelInUse = allowedModels.has(requestedModel) ? requestedModel : defaultModel;
 		let fellBack = false;
 
-		for (const chunk of chunks) {
+		for (const chunk of chunksToProcess) {
 			const prompt = `
 You are an expert exam author. From the course content, generate ${perChunk} multiple-choice questions.
 Rules:
