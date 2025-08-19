@@ -82,6 +82,7 @@ export async function POST(req: NextRequest) {
 		const form = await req.formData();
 		const file = form.get('file') as File | null;
 		const requestedCount = Number(form.get('count') || 10);
+		const requestedModel = String(form.get('model') || '').trim();
 
 		if (!file) return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
 		if (!requestedCount || requestedCount < 1) {
@@ -122,6 +123,14 @@ export async function POST(req: NextRequest) {
 
 		const allQuestions: any[] = [];
 
+		// Allow selecting among a safe list of models; default to gpt-5-mini
+		const allowedModels = new Set([
+			'gpt-5-mini',
+			'gpt-4o-mini',
+			'o4-mini'
+		]);
+		const model = allowedModels.has(requestedModel) ? requestedModel : 'gpt-5-mini';
+
 		for (const chunk of chunks) {
 			const prompt = `
 You are an expert exam author. From the course content, generate ${perChunk} multiple-choice questions.
@@ -138,7 +147,7 @@ Course content:
 			`.trim();
 
 			const response = await openai.responses.create({
-				model: 'gpt-5-mini',
+				model,
 				input: prompt,
 				temperature: 0.3
 			});
