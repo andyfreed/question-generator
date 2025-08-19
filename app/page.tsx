@@ -18,21 +18,23 @@ export default function Home() {
 	const [questions, setQuestions] = useState<Question[]>([]);
 
 	function toCsv(rows: Question[], cat: string): string {
-		const header = ['ID', 'Category', 'Question', 'A', 'B', 'C', 'D', 'Correct'];
-		const q = (s: string) => '"' + (s || '').replace(/"/g, '""') + '"';
-		const idxToLetter = (i: number) => (['A', 'B', 'C', 'D'][i] || '');
+		const header = ['ID', 'Title', 'Category', 'Type', 'Post Content', 'Status', 'Menu Order', 'Options', 'Answer'];
+		const q = (s: string | number) => '"' + String(s ?? '').replace(/"/g, '""') + '"';
 		const lines: string[] = [header.map(q).join(',')];
 		for (const row of rows) {
-			const [a, b, c, d] = [row.options?.[0] || '', row.options?.[1] || '', row.options?.[2] || '', row.options?.[3] || ''];
+			const options = [row.options?.[0] || '', row.options?.[1] || '', row.options?.[2] || '', row.options?.[3] || ''];
+			const optionsPipe = options.join('|');
+			const answerText = options[row.correctIndex] || '';
 			lines.push([
 				'',
-				cat,
 				row.question || '',
-				a,
-				b,
-				c,
-				d,
-				idxToLetter(row.correctIndex)
+				cat,
+				'single-choice',
+				row.question || '',
+				'publish',
+				1,
+				optionsPipe,
+				answerText
 			].map(q).join(','));
 		}
 		return lines.join('\r\n');
