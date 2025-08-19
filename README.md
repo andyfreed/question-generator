@@ -1,3 +1,72 @@
+## AI Exam Question Generator (Next.js + TypeScript)
+
+Generate multiple‑choice exam questions (4 options, 1 correct) from a `.pdf` or `.docx` course document using OpenAI `gpt-5-mini`.
+
+### Features
+- Upload `.pdf` or `.docx`
+- Choose number of questions to generate
+- Strict output shape: `{ question, options[4], correctIndex }`
+- Chunking for long documents
+
+### Stack
+- Next.js (App Router) + TypeScript
+- OpenAI SDK
+- PDF parsing: `pdf-parse`
+- DOCX parsing: `mammoth`
+
+### Getting started
+1) Install dependencies
+```bash
+npm install
+```
+
+2) Configure the API key (keep it private)
+Create `.env.local` in the project root:
+```bash
+OPENAI_API_KEY=sk-...
+```
+
+3) Run locally
+```bash
+npm run dev
+# http://localhost:3000
+```
+
+### Usage
+1) Open `http://localhost:3000`
+2) Upload a `.pdf` or `.docx`
+3) Set the number of questions
+4) Click Generate
+
+### API
+- Route: `POST /api/generate`
+- Body: `multipart/form-data` with fields:
+  - `file`: the uploaded `.pdf` or `.docx`
+  - `count`: number of questions to generate
+- Response:
+```json
+{
+  "questions": [
+    {
+      "question": "string",
+      "options": ["string", "string", "string", "string"],
+      "correctIndex": 0
+    }
+  ]
+}
+```
+
+### Changing the model
+Default is `gpt-5-mini` in `app/api/generate/route.ts`. Update the `model` field there if needed.
+
+### Deployment
+- Vercel or any Node‑compatible host works
+- Set `OPENAI_API_KEY` as a protected environment variable in your hosting provider
+
+### Notes
+- The route uses dynamic imports for `pdf-parse` and `mammoth` and is marked dynamic to avoid build‑time issues
+- The server instructs the model to return strict JSON; a small parser attempts to recover JSON if the model adds extra text
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
