@@ -17,11 +17,24 @@ export default function Home() {
 	const [error, setError] = useState<string | null>(null);
 	const [questions, setQuestions] = useState<Question[]>([]);
 
+	function randomizeQuestionOptions(q: Question): Question {
+		const opts = Array.isArray(q.options) ? q.options.slice(0, 4) : [];
+		while (opts.length < 4) opts.push('');
+		const indices = [0, 1, 2, 3];
+		for (let i = indices.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[indices[i], indices[j]] = [indices[j], indices[i]];
+		}
+		const shuffled = indices.map((k) => opts[k]);
+		const newCorrectIndex = Math.max(0, indices.indexOf(q.correctIndex));
+		return { ...q, options: shuffled, correctIndex: newCorrectIndex };
+	}
+
 	function toCsv(rows: Question[], cat: string): string {
 		const header = ['ID', 'Title', 'Category', 'Type', 'Post Content', 'Status', 'Menu Order', 'Options', 'Answer'];
 		const q = (s: string | number) => '"' + String(s ?? '').replace(/"/g, '""') + '"';
 		const lines: string[] = [header.map(q).join(',')];
-		for (const row of rows) {
+		rows.forEach((row, idx) => {
 			const options = [row.options?.[0] || '', row.options?.[1] || '', row.options?.[2] || '', row.options?.[3] || ''];
 			const optionsPipe = options.join('|');
 			const answerText = options[row.correctIndex] || '';
@@ -32,11 +45,11 @@ export default function Home() {
 				'single-choice',
 				row.question || '',
 				'publish',
-				1,
+				idx + 1,
 				optionsPipe,
 				answerText
 			].map(q).join(','));
-		}
+		});
 		return lines.join('\r\n');
 	}
 
@@ -79,7 +92,8 @@ export default function Home() {
 				try { data = JSON.parse(text); } catch { throw new Error(text || 'Server error'); }
 			}
 			if (!res.ok) throw new Error(data?.error || 'Failed to generate');
-			setQuestions(Array.isArray(data.questions) ? data.questions : []);
+			const normalized: Question[] = Array.isArray(data.questions) ? data.questions : [];
+			setQuestions(normalized.map(randomizeQuestionOptions));
 		} catch (err: any) {
 			setError(err?.message || 'Something went wrong');
 		} finally {
