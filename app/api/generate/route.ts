@@ -67,7 +67,7 @@ function stripAdministrativeSections(src: string): string {
 
 // --- Improved chunking (safe for Node) ---
 // Prefer breaking at sentence/paragraph boundaries; include small overlap for context
-function chunkText(src: string, maxChars = 8000, overlap = 200): string[] {
+function chunkText(src: string, maxChars = 6000, overlap = 100): string[] {
   const text = src.replace(/\s+/g, ' ').trim();
   if (!text) return [];
 
@@ -157,6 +157,14 @@ function isAdminQuestion(q: any): boolean {
   return BANNED_TOKENS_IN_STEM.some(t => hay.includes(t));
 }
 
+// --- Small util for timeouts ---
+async function withTimeout<T>(p: Promise<T>, ms: number, label='task'): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms);
+    p.then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); });
+  });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
@@ -169,18 +177,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid count' }, { status: 400 });
     }
 
-    const rawText = await extractTextFromFile(file);
+    // Hard time budget to avoid Vercel timeout
+    const TIME_BUDGET_MS = 50_000;
+    const start = Date.now();
+    const timeLeft = () => TIME_BUDGET_MS - (Date.now() - start);
+
+    // Extract with a guard so we don't burn all time on parsing
+    const rawText = await withTimeout(extractTextFromFile(file), 12_000, 'text extraction');
     if (!rawText) return NextResponse.json({ error: 'Empty document' }, { status: 400 });
 
     // Clean admin/meta before chunking
     const cleanedText = stripAdministrativeSections(rawText);
-    const chunks = chunkText(cleanedText, 8000);
+
+    // Cap total text so prompts stay small
+    const MAX_TEXT = 300_000;
+    const safeText = cleanedText.length > MAX_TEXT ? cleanedText.slice(0, MAX_TEXT) : cleanedText;
+
+    const chunks = chunkText(safeText, 6000, 100);
 
     // Keep existing chunk limits to avoid runtime changes
     const defaultMaxChunks = process.env.VERCEL ? 1 : 3;
     const maxChunks = Math.max(1, Number(process.env.MAX_CHUNKS || defaultMaxChunks));
     const chunksToProcess = chunks.slice(0, maxChunks);
-    const perChunk = Math.max(1, Math.ceil(requestedCount / chunksToProcess.length));
+
+    // Bound total questions to keep latency low
+    const QUESTION_CAP = Math.max(1, Number(process.env.QUESTION_CAP || 10));
+    const desiredTotal = Math.min(requestedCount, QUESTION_CAP);
+    const perChunk = Math.max(1, Math.ceil(desiredTotal / Math.max(1, chunksToProcess.length)));
 
     // Schema kept for documentation; output shape unchanged
     const schema = {
@@ -221,7 +244,14 @@ export async function POST(req: NextRequest) {
     let modelInUse = allowedModels.has(requestedModel) ? requestedModel : defaultModel;
     let fellBack = false;
 
+    const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || 25_000);
+
     for (const chunk of chunksToProcess) {
+      if (timeLeft() < 8_000) {
+        // Not enough time to safely complete another LLM call
+        break;
+      }
+
       const prompt = `
 You are an expert exam author. From the course **instructional content**, generate ${perChunk} multiple-choice questions.
 
@@ -246,7 +276,7 @@ Course content:
 
       let response: any;
       try {
-        response = await openai.responses.create({ model: modelInUse, input: prompt });
+        response = await openai.responses.create({ model: modelInUse, input: prompt }, { timeout: OPENAI_TIMEOUT_MS });
       } catch (err: any) {
         const message = String(err?.message || err?.error?.message || '');
         const status = Number((err && (err.status || err.code)) || 0);
@@ -254,7 +284,7 @@ Course content:
           // Fallback to a widely available model
           modelInUse = defaultModel;
           fellBack = true;
-          response = await openai.responses.create({ model: modelInUse, input: prompt });
+          response = await openai.responses.create({ model: modelInUse, input: prompt }, { timeout: OPENAI_TIMEOUT_MS });
         } else {
           throw err;
         }
@@ -267,7 +297,7 @@ Course content:
 
     // Filter any residual admin-style questions, then dedupe and cap
     const filtered = allQuestions.filter(q => !isAdminQuestion(q));
-    const finalQuestions = dedupeAndLimit(filtered, requestedCount);
+    const finalQuestions = dedupeAndLimit(filtered, desiredTotal);
     return NextResponse.json({ modelUsed: modelInUse, questions: finalQuestions });
   } catch (err: any) {
     console.error(err);
