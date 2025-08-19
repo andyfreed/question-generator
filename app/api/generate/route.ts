@@ -124,13 +124,15 @@ export async function POST(req: NextRequest) {
 
 		const allQuestions: any[] = [];
 
-		// Allow selecting among a safe list of models; default to gpt-5-mini
+		// Allow selecting among a safe list of models; default to gpt-4o-mini for broad availability
 		const allowedModels = new Set([
 			'gpt-5-mini',
 			'gpt-4o-mini',
 			'o4-mini'
 		]);
-		const model = allowedModels.has(requestedModel) ? requestedModel : 'gpt-5-mini';
+		const defaultModel = 'gpt-4o-mini';
+		let modelInUse = allowedModels.has(requestedModel) ? requestedModel : defaultModel;
+		let fellBack = false;
 
 		for (const chunk of chunks) {
 			const prompt = `
@@ -147,10 +149,21 @@ Course content:
 """${chunk}"""
 			`.trim();
 
-			const response = await openai.responses.create({
-				model,
-				input: prompt
-			});
+			let response: any;
+			try {
+				response = await openai.responses.create({ model: modelInUse, input: prompt });
+			} catch (err: any) {
+				const message = String(err?.message || err?.error?.message || '');
+				const status = Number((err && (err.status || err.code)) || 0);
+				if (!fellBack && status === 403 && /does not have access to model/i.test(message)) {
+					// Fallback to a widely available model
+					modelInUse = defaultModel;
+					fellBack = true;
+					response = await openai.responses.create({ model: modelInUse, input: prompt });
+				} else {
+					throw err;
+				}
+			}
 
 			const text = response.output_text || '';
 			const parsed = parseJsonFromText(text) ?? { questions: [] };
@@ -158,7 +171,7 @@ Course content:
 		}
 
 		const finalQuestions = dedupeAndLimit(allQuestions, requestedCount);
-		return NextResponse.json({ questions: finalQuestions });
+		return NextResponse.json({ modelUsed: modelInUse, questions: finalQuestions });
 	} catch (err: any) {
 		console.error(err);
 		return NextResponse.json({ error: err?.message || 'Server error' }, { status: 500 });
