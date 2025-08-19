@@ -68,9 +68,16 @@ export default function Home() {
 		setLoading(true);
 		try {
 			const res = await fetch('/api/generate', { method: 'POST', body: form });
-			const data = await res.json();
+			const contentType = res.headers.get('content-type') || '';
+			let data: any = null;
+			if (contentType.includes('application/json')) {
+				data = await res.json();
+			} else {
+				const text = await res.text();
+				try { data = JSON.parse(text); } catch { throw new Error(text || 'Server error'); }
+			}
 			if (!res.ok) throw new Error(data?.error || 'Failed to generate');
-			setQuestions(data.questions || []);
+			setQuestions(Array.isArray(data.questions) ? data.questions : []);
 		} catch (err: any) {
 			setError(err?.message || 'Something went wrong');
 		} finally {
