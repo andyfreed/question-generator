@@ -149,8 +149,7 @@ Course content:
 
 			const response = await openai.responses.create({
 				model,
-				input: prompt,
-				temperature: 0.3
+				input: prompt
 			});
 
 			const text = response.output_text || '';
