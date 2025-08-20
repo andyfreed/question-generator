@@ -17,7 +17,13 @@ async function extractTextFromFile(file: File): Promise<string> {
   if (name.endsWith('.pdf')) {
     // Import internal lib to avoid package index.js debug path that reads a test file
     const pdfParse = (await import('pdf-parse/lib/pdf-parse.js')).default as unknown as (buf: Buffer) => Promise<{ text: string }>;
-    const parsed = await pdfParse(buf);
+    let parsed: { text: string };
+    try {
+      // @ts-ignore optional second arg supported by pdf-parse for constraints
+      parsed = await (pdfParse as any)(buf, { max: Number(process.env.PDF_MAX_PAGES || (process.env.VERCEL ? 6 : 0)) || undefined });
+    } catch {
+      parsed = await pdfParse(buf);
+    }
     return (parsed.text || '').trim();
   }
   if (name.endsWith('.docx')) {
@@ -222,7 +228,7 @@ export async function POST(req: NextRequest) {
     const cleanedText = stripAdministrativeSections(rawText);
 
     // Cap total text so prompts stay small
-    const MAX_TEXT = 300_000;
+    const MAX_TEXT = Number(process.env.MAX_TEXT || 200_000);
     const safeText = cleanedText.length > MAX_TEXT ? cleanedText.slice(0, MAX_TEXT) : cleanedText;
 
     const chunks = chunkText(safeText, 6000, 100);
@@ -233,7 +239,7 @@ export async function POST(req: NextRequest) {
     const chunksToProcess = chunks.slice(0, maxChunks);
 
     // Bound total questions to keep latency low
-    const QUESTION_CAP = Math.max(1, Number(process.env.QUESTION_CAP || 10));
+    const QUESTION_CAP = Math.max(1, Number(process.env.QUESTION_CAP || (process.env.VERCEL ? 6 : 10)));
     const desiredTotal = Math.min(requestedCount, QUESTION_CAP);
     const perChunk = Math.max(1, Math.ceil(desiredTotal / Math.max(1, chunksToProcess.length)));
 
@@ -249,7 +255,7 @@ export async function POST(req: NextRequest) {
     let modelInUse = allowedModels.has(requestedModel) ? requestedModel : defaultModel;
     let fellBack = false;
 
-    const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || 25_000);
+    const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || (process.env.VERCEL ? 7_000 : 25_000));
 
     for (const chunk of chunksToProcess) {
       if (timeLeft() < 8_000) {
